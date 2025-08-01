@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# v1 ↔ v2 왔다갔다 전환 테스트 스크립트
-# 사용법: ./toggle_version.sh [v1|v2|auto]
+# v3 ↔ v2 왔다갔다 전환 테스트 스크립트
+# 사용법: ./toggle_version.sh [v3|v2|auto]
 
 CURRENT_VERSION_FILE="/tmp/current_active_version"
 
@@ -9,20 +9,20 @@ CURRENT_VERSION_FILE="/tmp/current_active_version"
 if [ -f "$CURRENT_VERSION_FILE" ]; then
     CURRENT_VERSION=$(cat $CURRENT_VERSION_FILE)
 else
-    CURRENT_VERSION="v1"  # 기본값
+    CURRENT_VERSION="v3"  # 기본값
 fi
 
 # 사용자 입력 처리
-if [ "$1" = "v1" ]; then
-    TARGET_VERSION="v1"
+if [ "$1" = "v3" ]; then
+    TARGET_VERSION="v3"
 elif [ "$1" = "v2" ]; then
     TARGET_VERSION="v2"
 elif [ "$1" = "auto" ]; then
-    # 자동 토글: v1 → v2, v2 → v1
-    if [ "$CURRENT_VERSION" = "v1" ]; then
+    # 자동 토글: v3 → v2, v2 → v3
+    if [ "$CURRENT_VERSION" = "v3" ]; then
         TARGET_VERSION="v2"
     else
-        TARGET_VERSION="v1"
+        TARGET_VERSION="v3"
     fi
 else
     echo "========================================"
@@ -31,25 +31,25 @@ else
     echo "현재 활성 버전: $CURRENT_VERSION"
     echo ""
     echo "사용법:"
-    echo "  ./toggle_version.sh v1     # v1으로 전환"
+    echo "  ./toggle_version.sh v3     # v3으로 전환"
     echo "  ./toggle_version.sh v2     # v2로 전환"  
     echo "  ./toggle_version.sh auto   # 자동 토글"
     echo ""
-    read -p "전환할 버전을 선택하세요 (v1/v2/auto): " TARGET_VERSION
+    read -p "전환할 버전을 선택하세요 (v3/v2/auto): " TARGET_VERSION
     
     if [ "$TARGET_VERSION" = "auto" ]; then
-        if [ "$CURRENT_VERSION" = "v1" ]; then
+        if [ "$CURRENT_VERSION" = "v3" ]; then
             TARGET_VERSION="v2"
         else
-            TARGET_VERSION="v1"
+            TARGET_VERSION="v3"
         fi
     fi
 fi
 
 # 버전별 포트 설정
-if [ "$TARGET_VERSION" = "v1" ]; then
+if [ "$TARGET_VERSION" = "v3" ]; then
     PORTS="10001 10002"
-    VERSION_NAME="v1"
+    VERSION_NAME="v3"
 elif [ "$TARGET_VERSION" = "v2" ]; then
     PORTS="10005 10006"
     VERSION_NAME="v2"

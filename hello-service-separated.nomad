@@ -1,8 +1,8 @@
 job "hello-service-separated" {
   datacenters = ["dc1"]
 
-  # 서비스 v1-a (포트 10001)
-  group "v1-group-a" {
+  # 서비스 v3-a (포트 10001)
+  group "v3-group-a" {
     count = 1
 
     network {
@@ -12,11 +12,11 @@ job "hello-service-separated" {
       }
     }
 
-    task "hello-task-v1" {
+    task "hello-task-v3" {
       driver = "docker"
 
       config {
-        image = "kantapia14/hello-service:v1"
+        image = "kantapia14/hello-service:v3"
         ports = ["http"]
       }
 
@@ -26,9 +26,9 @@ job "hello-service-separated" {
       }
 
       service {
-        name = "hello-service-v1"
+        name = "hello-service-v3"
         port = "http"
-        tags = ["v1", "production", "instance-a"]
+        tags = ["v3", "production", "instance-a"]
         check {
           type     = "http"
           path     = "/hello"
@@ -39,8 +39,8 @@ job "hello-service-separated" {
     }
   }
 
-  # 서비스 v1-b (포트 10002)
-  group "v1-group-b" {
+  # 서비스 v3-b (포트 10002)
+  group "v3-group-b" {
     count = 1
 
     network {
@@ -50,11 +50,11 @@ job "hello-service-separated" {
       }
     }
 
-    task "hello-task-v1" {
+    task "hello-task-v3" {
       driver = "docker"
 
       config {
-        image = "kantapia14/hello-service:v1"
+        image = "kantapia14/hello-service:v3"
         ports = ["http"]
       }
 
@@ -64,9 +64,9 @@ job "hello-service-separated" {
       }
 
       service {
-        name = "hello-service-v1"
+        name = "hello-service-v3"
         port = "http"
-        tags = ["v1", "production", "instance-b"]
+        tags = ["v3", "production", "instance-b"]
         check {
           type     = "http"
           path     = "/hello"
