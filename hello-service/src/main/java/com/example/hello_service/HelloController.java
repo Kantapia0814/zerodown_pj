@@ -7,6 +7,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class HelloController {
     @GetMapping("/hello")
     public String hello() {
-        return "Cristiano Ronaldo is the best player in the world!";
+        return "Kylian Mbappe is the best player in the world!";
     }
 } 
