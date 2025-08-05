@@ -86,7 +86,7 @@ job "hello-service-dynamic" {
       service {
         name = "hello-service"
         port = "http"
-        tags = ["standby", "v3", "production"]
+        tags = ["standby", "v2", "production"]
         
         meta {
           version = "v2"

@@ -1,0 +1,82 @@
+upstream hello_backend {
+{{- range service "hello-service" }}
+  {{- if .Tags | contains "active" }}
+    server {{.Address}}:{{.Port}} weight=1 max_fails=3 fail_timeout=30s;
+  {{- end }}
+{{- end }}
+}
+
+upstream hello_backend_standby {
+{{- range service "hello-service" }}
+  {{- if .Tags | contains "standby" }}
+    server {{.Address}}:{{.Port}} weight=1 max_fails=3 fail_timeout=30s;
+  {{- end }}
+{{- end }}
+}
+
+server {
+    listen 8080;
+    server_name localhost;
+
+    # Health check endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+
+    # Main service endpoint
+    location / {
+        proxy_pass http://hello_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Backend "consul-template";
+    }
+
+    # Standby services (for testing)
+    location /standby {
+        proxy_pass http://hello_backend_standby/hello;
+        proxy_set_header Host $host;
+        proxy_set_header X-Standby-Test "true";
+    }
+
+    # Service status endpoint
+    location /consul-status {
+        default_type application/json;
+        return 200 '{
+            "status": "ok",
+            "timestamp": "{{timestamp}}",
+            "active_services": [
+{{- $first := true }}
+{{- range service "hello-service" }}
+  {{- if .Tags | contains "active" }}
+    {{- if not $first }},{{- end }}
+                {
+                    "address": "{{.Address}}",
+                    "port": {{.Port}},
+                    "tags": [{{range $tagIndex, $tag := .Tags}}{{if $tagIndex}},{{end}}"{{$tag}}"{{end}}],
+                    "status": "{{.Status}}"
+                }
+    {{- $first = false }}
+  {{- end }}
+{{- end }}
+            ],
+            "standby_services": [
+{{- $first := true }}
+{{- range service "hello-service" }}
+  {{- if .Tags | contains "standby" }}
+    {{- if not $first }},{{- end }}
+                {
+                    "address": "{{.Address}}",
+                    "port": {{.Port}},
+                    "tags": [{{range $tagIndex, $tag := .Tags}}{{if $tagIndex}},{{end}}"{{$tag}}"{{end}}],
+                    "status": "{{.Status}}"
+                }
+    {{- $first = false }}
+  {{- end }}
+{{- end }}
+            ]
+        }';
+    }
+}

@@ -249,6 +249,36 @@ instant_switch() {
     show_status
 }
 
+# 실제 standby 태그를 가진 그룹 찾기  
+find_standby_group() {
+    # 라인 번호 기반으로 정확한 섹션 찾기
+    local active_start=$(grep -n 'group "active-group"' "$NOMAD_JOB_FILE" | cut -d: -f1)
+    local standby_start=$(grep -n 'group "standby-group"' "$NOMAD_JOB_FILE" | cut -d: -f1)
+    
+    # active-group 섹션에서 standby 확인 (active_start부터 standby_start 직전까지)
+    local standby_before=$((standby_start - 1))
+    local active_has_standby=$(sed -n "${active_start},${standby_before}p" "$NOMAD_JOB_FILE" | grep -c '"standby"')
+    
+    # standby-group 섹션에서 standby 확인 (standby_start부터 파일 끝까지)
+    local standby_has_standby=$(sed -n "${standby_start},\$p" "$NOMAD_JOB_FILE" | grep -c '"standby"')
+    
+    # 디버깅 정보는 stderr로 출력 (반환값과 분리)
+    echo "🔍 그룹 태그 분석:" >&2
+    echo "  active-group(${active_start}~${standby_before})에 standby 태그: $active_has_standby" >&2
+    echo "  standby-group(${standby_start}~끝)에 standby 태그: $standby_has_standby" >&2
+    
+    if [ "$active_has_standby" -gt 0 ]; then
+        echo "active-group:${active_start}:${standby_before}"
+    elif [ "$standby_has_standby" -gt 0 ]; then
+        # standby-group의 끝 라인 계산 (파일 마지막 그룹이므로 마지막 } 찾기)
+        local file_end=$(wc -l < "$NOMAD_JOB_FILE")
+        local standby_end=$((file_end - 1))  # 마지막 }는 보통 마지막에서 두 번째 라인
+        echo "standby-group:${standby_start}:${standby_end}"
+    else
+        echo ""
+    fi
+}
+
 # 새 버전을 Standby로 배포 (Active는 건드리지 않음)
 deploy_new_version() {
     local new_version="$1"
@@ -280,28 +310,39 @@ deploy_new_version() {
     # 2. 백업
     cp "$NOMAD_JOB_FILE" "${NOMAD_JOB_FILE}.${new_version}.backup.$(date +%Y%m%d_%H%M%S)"
     
-    # 3. Standby 그룹만 새 버전으로 변경
-    log_magic "🎭 Standby 그룹을 $new_version으로 업데이트 중..."
+    # 3. 실제 Standby 태그를 가진 그룹 찾기
+    local standby_info=$(find_standby_group)
     
-    # standby-group의 이미지와 버전 변경 (awk를 사용한 안전한 방법)
-    log_info "standby-group만 수정 중..."
+    if [ -z "$standby_info" ]; then
+        log_error "❌ Standby 태그를 가진 그룹을 찾을 수 없습니다!"
+        return 1
+    fi
     
-    # awk를 사용하여 standby-group 내부만 정확히 수정
-    awk -v new_ver="$new_version" '
-    /group "standby-group"/ { in_standby = 1 }
-    in_standby && /^  }$/ { in_standby = 0 }
-    in_standby && /image = "kantapia14\/hello-service:v[0-9]+"/ {
+    # 그룹명:시작라인:끝라인 파싱
+    local actual_standby_group=$(echo "$standby_info" | cut -d: -f1)
+    local start_line=$(echo "$standby_info" | cut -d: -f2)
+    local end_line=$(echo "$standby_info" | cut -d: -f3)
+    
+    log_magic "🎭 실제 Standby 그룹($actual_standby_group, 라인 $start_line-$end_line)을 $new_version으로 업데이트 중..."
+    log_info "$actual_standby_group만 수정 중..."
+    
+    # 라인 번호 기반으로 정확한 범위만 수정
+    awk -v new_ver="$new_version" -v start="$start_line" -v end="$end_line" '
+    NR >= start && NR <= end && /image = "kantapia14\/hello-service:v[0-9]+"/ {
         gsub(/v[0-9]+/, new_ver)
     }
-    in_standby && /version = "v[0-9]+"/ {
+    NR >= start && NR <= end && /version = "v[0-9]+"/ {
+        gsub(/"v[0-9]+"/, "\"" new_ver "\"")
+    }
+    NR >= start && NR <= end && (/tags = \["active", "v[0-9]+", "production"\]/ || /tags = \["standby", "v[0-9]+", "production"\]/) {
         gsub(/"v[0-9]+"/, "\"" new_ver "\"")
     }
     { print }
     ' "$NOMAD_JOB_FILE" > "${NOMAD_JOB_FILE}.tmp" && mv "${NOMAD_JOB_FILE}.tmp" "$NOMAD_JOB_FILE"
     
     log_info "변경 사항:"
-    log_info "standby-group 구성:"
-    sed -n '/group "standby-group"/,/^  }$/p' "$NOMAD_JOB_FILE" | grep -E "(image|version)" | head -3
+    log_info "$actual_standby_group 구성:"
+    sed -n "${start_line},${end_line}p" "$NOMAD_JOB_FILE" | grep -E "(image|version|tags)" | head -4
     
     # 4. Standby만 재배포
     log_zero "Standby 그룹만 재배포 중... (Active는 그대로!)"
@@ -331,6 +372,43 @@ deploy_new_version() {
 }
 
 # 메인 로직
+# 태그 감지 테스트 함수
+test_tags() {
+    echo "========================================"
+    echo "🧪 태그 감지 테스트"
+    echo "========================================"
+    
+    echo "1. active-group 패턴 테스트:"
+    grep -n 'active-group' "$NOMAD_JOB_FILE"
+    
+    echo ""
+    echo "2. standby-group 패턴 테스트:"
+    grep -n 'standby-group' "$NOMAD_JOB_FILE"
+    
+    echo ""
+    echo "3. active-group 섹션에서 standby 찾기 (라인 번호 기반):"
+    local active_start=$(grep -n 'group "active-group"' "$NOMAD_JOB_FILE" | cut -d: -f1)
+    local standby_start=$(grep -n 'group "standby-group"' "$NOMAD_JOB_FILE" | cut -d: -f1)
+    local standby_before=$((standby_start - 1))
+    sed -n "${active_start},${standby_before}p" "$NOMAD_JOB_FILE" | grep '"standby"'
+    
+    echo ""
+    echo "4. standby-group 섹션에서 standby 찾기 (라인 번호 기반):"
+    sed -n "${standby_start},\$p" "$NOMAD_JOB_FILE" | grep '"standby"'
+    
+    echo ""
+    echo "5. find_standby_group() 함수 테스트:"
+    local result=$(find_standby_group)
+    if [ -n "$result" ]; then
+        local group_name=$(echo "$result" | cut -d: -f1)
+        local start_line=$(echo "$result" | cut -d: -f2)
+        local end_line=$(echo "$result" | cut -d: -f3)
+        echo "결과: [$group_name] (라인 $start_line-$end_line)"
+    else
+        echo "결과: [없음]"
+    fi
+}
+
 case "$1" in
     "status")
         show_status
@@ -379,6 +457,9 @@ case "$1" in
         echo "  docker build -t kantapia14/hello-service:v3 ."
         echo "  docker push kantapia14/hello-service:v3"
         echo "  $0 deploy v3  # 재배포"
+        ;;
+    "test-tags")
+        test_tags
         ;;
     *)
         echo "========================================"
