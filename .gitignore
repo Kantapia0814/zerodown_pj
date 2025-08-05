@@ -59,4 +59,11 @@ nomad.log
 # Temporary files
 transferring
 [internal]
-= 
+=
+
+# 자동 생성되는 서비스 디렉토리
+api-gateway/
+eureka-server/
+user-service/
+*/bin/
+*/build/ 
