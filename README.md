@@ -134,18 +134,23 @@ curl --version
 ### **1. 저장소 클론**
 
 ```bash
-git clone https://github.com/your-username/kantapia_pj.git
-cd kantapia_pj
+git clone https://github.com/Kantapia0814/zerodown_pj.git
+cd zerodown_pj
 ```
 
 ### **2. IP 주소 설정**
 
 ```bash
 # 현재 IP 주소 확인
-ip addr show  # Linux
+ip addr show  # Linux - eth0 인터페이스에서 inet 주소 확인
 ipconfig      # Windows
 
-# 예시: 172.17.187.181
+# Linux 예시:
+# 2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP>
+#    inet 172.17.187.181/20 brd 172.17.191.255 scope global eth0
+#         ^^^^^^^^^^^^^^^^ 이 부분이 사용할 IP 주소
+
+# 예시 IP: 172.17.187.181
 ```
 
 **⚠️ 중요**: 모든 설정 파일에서 `172.17.187.181`을 실제 IP로 변경해야 합니다.
