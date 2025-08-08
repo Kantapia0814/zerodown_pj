@@ -44,22 +44,30 @@ k6 run k6-quick-test.js &  # 1000 RPS 부하
 
 ### **1. Docker 설치**
 
-#### Ubuntu/Linux:
-```bash
-# Docker 설치
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# 사용자 권한 추가
-sudo usermod -aG docker $USER
-
-# 확인
-docker --version
-```
-
 #### Windows:
 1. [Docker Desktop](https://www.docker.com/products/docker-desktop) 다운로드 및 설치
 2. WSL2 활성화 필요
+
+**설치된 Docker Hub를 WSL과 연결하기**
+```bash
+# WSL에서 Docker 명령어 사용 가능한지 확인
+docker --version
+
+# 만약 연결이 안 되어 있다면:
+# 1. Docker Desktop 실행
+# 2. Settings > Resources > WSL Integration 활성화
+# 3. WSL 배포판 선택 (Ubuntu 등)
+# 4. Apply & Restart
+
+# Docker Hub 로그인 (이미지 푸시를 위해 필요)
+docker login
+
+# 로그인 확인
+docker info
+
+# 연결 확인
+docker ps
+```
 
 #### macOS:
 1. [Docker Desktop](https://www.docker.com/products/docker-desktop) 다운로드 및 설치
@@ -88,7 +96,19 @@ sudo mv consul /usr/local/bin/
 consul version
 ```
 
-### **4. Nginx 설치**
+### **4. Consul Template 설치**
+
+```bash
+# Linux/macOS
+curl -LO https://releases.hashicorp.com/consul-template/0.36.0/consul-template_0.36.0_linux_amd64.zip
+unzip consul-template_0.36.0_linux_amd64.zip
+sudo mv consul-template /usr/local/bin/
+
+# 확인
+consul-template --version
+```
+
+### **5. Nginx 설치**
 
 #### Ubuntu/Linux:
 ```bash
@@ -101,7 +121,7 @@ sudo apt install nginx -y
 brew install nginx
 ```
 
-### **5. k6 설치 (성능 테스트용)**
+### **6. k6 설치 (성능 테스트용)**
 
 ```bash
 # Linux
@@ -116,7 +136,7 @@ brew install k6
 k6 version
 ```
 
-### **6. 기타 도구**
+### **7. 기타 도구**
 
 ```bash
 # jq (JSON 파싱용)
@@ -155,11 +175,17 @@ ipconfig      # Windows
 
 **⚠️ 중요**: 모든 설정 파일에서 `172.17.187.181`을 실제 IP로 변경해야 합니다.
 
+**⚠️ Docker Hub 저장소 변경**: `kantapia14/hello-service`를 본인의 Docker Hub ID로 변경해야 합니다.
+
 ### **3. 설정 파일 수정**
 
 ```bash
-# Nomad 설정
+# IP 주소 변경
 sed -i 's/172.17.187.181/YOUR_IP/g' hello-service-dynamic.nomad
+
+# Docker Hub 저장소 변경
+sed -i 's/kantapia14/YOUR_DOCKERHUB_ID/g' hello-service-dynamic.nomad
+sed -i 's/kantapia14/YOUR_DOCKERHUB_ID/g' toggle_version_consul_true_zero_downtime.sh
 
 # 스크립트 설정 (필요시)
 # toggle_version_consul_true_zero_downtime.sh 파일에서 IP 확인
@@ -175,16 +201,29 @@ chmod +x *.sh
 
 ### **5. Hello Service 이미지 준비**
 
+#### **5-1. HelloController.java 버전별 수정**
+
+각 버전마다 다른 응답을 보내도록 HelloController.java를 수정합니다. 
+
+**v1 버전**: `/hello` 엔드포인트에서 "Hello from hello-service! Version: v1" 응답
+**v2 버전**: `/hello` 엔드포인트에서 "Hello from hello-service! Version: v2" 응답
+
+버전별로 다른 메시지를 반환하도록 HelloController.java 파일의 내용을 수정한 후 빌드하면 됩니다.
+
+#### **5-2. 버전별 빌드 및 이미지 생성**
+
 ```bash
 cd hello-service
 
-# Docker 이미지 빌드
-docker build -t kantapia14/hello-service:v1 .
-docker build -t kantapia14/hello-service:v2 .
+# v1 버전 빌드 (HelloController.java를 v1 내용으로 수정 후)
+docker build -t YOUR_DOCKERHUB_ID/hello-service:v1 .
+
+# v2 버전 빌드 (HelloController.java를 v2 내용으로 수정 후)
+docker build -t YOUR_DOCKERHUB_ID/hello-service:v2 .
 
 # (선택) Docker Hub에 푸시
-docker push kantapia14/hello-service:v1
-docker push kantapia14/hello-service:v2
+docker push YOUR_DOCKERHUB_ID/hello-service:v1
+docker push YOUR_DOCKERHUB_ID/hello-service:v2
 
 cd ..
 ```
